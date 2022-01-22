@@ -1,2 +1,3 @@
-# microsoft-tasks-cli
-A command-line tool for manipulating Microsoft To Do/Tasks
+# Microsoft Tasks CLI
+
+A command-line tool for manipulating Microsoft To Do/Tasks.
