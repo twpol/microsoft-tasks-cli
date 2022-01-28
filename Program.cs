@@ -12,9 +12,9 @@ class Program
     /// <param name="tasks">Action: show all To Dos/Tasks in a list</param>
     /// <param name="createTask">Action: create a new To Do/Task</param>
     /// <param name="list">Specify the name or ID of a task list</param>
-    /// <param name="title">Specify the title of a task</param>
-    /// <param name="description">Specify the description of a task</param>
-    static async Task Main(FileInfo? config = null, bool lists = false, bool tasks = false, bool createTask = false, string? list = null, string? title = null, string? description = null)
+    /// <param name="name">Specify the name of a task</param>
+    /// <param name="body">Specify the body of a task</param>
+    static async Task Main(FileInfo? config = null, bool lists = false, bool tasks = false, bool createTask = false, string? list = null, string? name = null, string? body = null)
     {
         if (config == null) config = new FileInfo("config.json");
         if (lists)
@@ -29,8 +29,8 @@ class Program
         else if (createTask)
         {
             ArgumentNullException.ThrowIfNull(list);
-            ArgumentNullException.ThrowIfNull(title);
-            CreateTask(LoadConfiguration(config), list, title, description ?? "");
+            ArgumentNullException.ThrowIfNull(name);
+            await CreateTask(LoadConfiguration(config), list, name, body ?? "");
         }
         else
         {
@@ -67,22 +67,37 @@ class Program
     static async Task Tasks(IConfigurationRoot config, string listName)
     {
         var service = GetExchange(config);
-        var taskFolder = await Retry("get tasks folder", () => Folder.Bind(service, WellKnownFolderName.Tasks));
-        var lists = await Retry("get list", () => taskFolder.FindFolders(new SearchFilter.ContainsSubstring(FolderSchema.DisplayName, listName), new FolderView(1)));
-        if (lists.TotalCount == 0) throw new InvalidDataException($"No list containing text: {listName}");
-        var tasks = await Retry("get tasks", () => lists.First().FindItems(new ItemView(1000)));
+        var list = await GetList(service, listName);
+        var tasks = await Retry("get tasks", () => list.FindItems(new ItemView(1000)));
         foreach (var task in tasks)
         {
             Console.WriteLine(task.Subject);
         }
     }
 
-    static void CreateTask(IConfigurationRoot config, string list, string title, string description)
+    static async Task CreateTask(IConfigurationRoot config, string listName, string name, string body)
     {
         var service = GetExchange(config);
-        // TODO: Find list
-        // TODO: Find task
-        // TODO: Create task
+        var list = await GetList(service, listName);
+        var existingTasks = await Retry("get existing tasks", () => list.FindItems(new SearchFilter.IsEqualTo(TaskSchema.Subject, name), new ItemView(1)));
+        if (existingTasks.TotalCount > 0)
+        {
+            Console.WriteLine($"WARNING: Duplicate task in {list.DisplayName}: {name}");
+            return;
+        }
+        var task = new Microsoft.Exchange.WebServices.Data.Task(service);
+        task.Subject = name;
+        task.Body = body;
+        await task.Save(list.Id);
+        Console.WriteLine($"Created task in {list.DisplayName}: {name}");
+    }
+
+    static async Task<Folder> GetList(ExchangeService service, string listName)
+    {
+        var taskFolder = await Retry("get tasks folder", () => Folder.Bind(service, WellKnownFolderName.Tasks));
+        var lists = await Retry("get list", () => taskFolder.FindFolders(new SearchFilter.ContainsSubstring(FolderSchema.DisplayName, listName), new FolderView(1)));
+        if (lists.TotalCount == 0) throw new InvalidDataException($"No list containing text: {listName}");
+        return lists.First();
     }
 
     static async Task<T> Retry<T>(string name, Func<Task<T>> action)
