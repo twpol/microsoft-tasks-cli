@@ -78,7 +78,7 @@ class Program
     static async Task CreateTask(IConfigurationRoot config, string listName, string name, string body)
     {
         var service = GetExchange(config);
-        var list = await GetList(service, listName);
+        var list = await GetList(service, listName, always: true);
         var existingTasks = await Retry("get existing tasks", () => list.FindItems(new SearchFilter.IsEqualTo(TaskSchema.Subject, name), new ItemView(1)));
         if (existingTasks.TotalCount > 0)
         {
@@ -92,10 +92,12 @@ class Program
         Console.WriteLine($"Created task in {list.DisplayName}: {name}");
     }
 
-    static async Task<Folder> GetList(ExchangeService service, string listName)
+    static async Task<Folder> GetList(ExchangeService service, string listName, bool always = false)
     {
         var taskFolder = await Retry("get tasks folder", () => Folder.Bind(service, WellKnownFolderName.Tasks));
+        if (listName == "") return taskFolder;
         var lists = await Retry("get list", () => taskFolder.FindFolders(new SearchFilter.ContainsSubstring(FolderSchema.DisplayName, listName), new FolderView(1)));
+        if (lists.TotalCount == 0 && always) return taskFolder;
         if (lists.TotalCount == 0) throw new InvalidDataException($"No list containing text: {listName}");
         return lists.First();
     }
