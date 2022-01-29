@@ -18,6 +18,7 @@ dotnet run -- [options]
   --list <list>      Specify the name or ID of a task list []
   --name <name>      Specify the name of a task []
   --body <body>      Specify the body of a task []
+  --important        Specify that the task is important [default: False]
   --version          Show version information
   -?, -h, --help     Show help and usage information
 ```

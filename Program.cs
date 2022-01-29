@@ -14,7 +14,8 @@ class Program
     /// <param name="list">Specify the name or ID of a task list</param>
     /// <param name="name">Specify the name of a task</param>
     /// <param name="body">Specify the body of a task</param>
-    static async Task Main(FileInfo? config = null, bool lists = false, bool tasks = false, bool createTask = false, string? list = null, string? name = null, string? body = null)
+    /// <param name="important">Specify that the task is important</param>
+    static async Task Main(FileInfo? config = null, bool lists = false, bool tasks = false, bool createTask = false, string? list = null, string? name = null, string? body = null, bool important = false)
     {
         if (config == null) config = new FileInfo("config.json");
         if (lists)
@@ -30,7 +31,7 @@ class Program
         {
             ArgumentNullException.ThrowIfNull(list);
             ArgumentNullException.ThrowIfNull(name);
-            await CreateTask(LoadConfiguration(config), list, name, body ?? "");
+            await CreateTask(LoadConfiguration(config), list, name, body ?? "", important);
         }
         else
         {
@@ -75,7 +76,7 @@ class Program
         }
     }
 
-    static async Task CreateTask(IConfigurationRoot config, string listName, string name, string body)
+    static async Task CreateTask(IConfigurationRoot config, string listName, string name, string body, bool important)
     {
         var service = GetExchange(config);
         var list = await GetList(service, listName, always: true);
@@ -88,6 +89,7 @@ class Program
         var task = new Microsoft.Exchange.WebServices.Data.Task(service);
         task.Subject = name;
         task.Body = body;
+        task.Importance = important ? Importance.High : Importance.Normal;
         await task.Save(list.Id);
         Console.WriteLine($"Created task in {list.DisplayName}: {name}");
     }
