@@ -1,6 +1,6 @@
 ﻿using Microsoft.Exchange.WebServices.Data;
 using Microsoft.Extensions.Configuration;
-using Task = System.Threading.Tasks.Task;
+using Task = Microsoft.Exchange.WebServices.Data.Task;
 
 class Program
 {
@@ -15,7 +15,7 @@ class Program
     /// <param name="name">Specify the name of a task</param>
     /// <param name="body">Specify the body of a task</param>
     /// <param name="important">Specify that the task is important</param>
-    static async Task Main(FileInfo? config = null, bool lists = false, bool tasks = false, bool createTask = false, string? list = null, string? name = null, string? body = null, bool important = false)
+    static async System.Threading.Tasks.Task Main(FileInfo? config = null, bool lists = false, bool tasks = false, bool createTask = false, string? list = null, string? name = null, string? body = null, bool important = false)
     {
         if (config == null) config = new FileInfo("config.json");
         if (lists)
@@ -54,7 +54,7 @@ class Program
         return service;
     }
 
-    static async Task Lists(IConfigurationRoot config)
+    static async System.Threading.Tasks.Task Lists(IConfigurationRoot config)
     {
         var service = GetExchange(config);
         var taskFolder = await Retry("get tasks folder", () => Folder.Bind(service, WellKnownFolderName.Tasks));
@@ -65,33 +65,34 @@ class Program
         }
     }
 
-    static async Task Tasks(IConfigurationRoot config, string listName)
+    static async System.Threading.Tasks.Task Tasks(IConfigurationRoot config, string listName)
     {
         var service = GetExchange(config);
         var list = await GetList(service, listName);
         var tasks = await Retry("get tasks", () => list.FindItems(new ItemView(1000)));
         foreach (var task in tasks)
         {
-            Console.WriteLine(task.Subject);
+            Console.WriteLine(FormatTask(task));
         }
     }
 
-    static async Task CreateTask(IConfigurationRoot config, string listName, string name, string body, bool important)
+    static async System.Threading.Tasks.Task CreateTask(IConfigurationRoot config, string listName, string name, string body, bool important)
     {
         var service = GetExchange(config);
         var list = await GetList(service, listName, always: true);
         var existingTasks = await Retry("get existing tasks", () => list.FindItems(new SearchFilter.IsEqualTo(TaskSchema.Subject, name), new ItemView(1)));
         if (existingTasks.TotalCount > 0)
         {
-            Console.WriteLine($"WARNING: Duplicate task in {list.DisplayName}: {name}");
+            Console.WriteLine($"WARNING: Duplicate task in {list.DisplayName}: {FormatTask(existingTasks.First())}");
             return;
         }
-        var task = new Microsoft.Exchange.WebServices.Data.Task(service);
+        var task = new Task(service);
         task.Subject = name;
         task.Body = body;
         task.Importance = important ? Importance.High : Importance.Normal;
         await task.Save(list.Id);
-        Console.WriteLine($"Created task in {list.DisplayName}: {name}");
+        await task.Load();
+        Console.WriteLine($"Created task in {list.DisplayName}: {FormatTask(task)}");
     }
 
     static async Task<Folder> GetList(ExchangeService service, string listName, bool always = false)
@@ -102,6 +103,12 @@ class Program
         if (lists.TotalCount == 0 && always) return taskFolder;
         if (lists.TotalCount == 0) throw new InvalidDataException($"No list containing text: {listName}");
         return lists.First();
+    }
+
+    static string FormatTask(Item item)
+    {
+        var task = item as Task;
+        return $"[{(task?.IsComplete ?? false ? "X" : " ")}] {(item.Importance == Importance.High ? "*" : " ")} {item.Subject}";
     }
 
     static async Task<T> Retry<T>(string name, Func<Task<T>> action)
