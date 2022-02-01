@@ -80,7 +80,11 @@ class Program
     {
         var service = GetExchange(config);
         var list = await GetList(service, listName, always: true);
-        var existingTasks = await Retry("get existing tasks", () => list.FindItems(new SearchFilter.IsEqualTo(TaskSchema.Subject, name), new ItemView(1)));
+        var existingTasks = await Retry("get existing tasks", () => list.FindItems(new SearchFilter.SearchFilterCollection(
+            LogicalOperator.And,
+            new SearchFilter.IsEqualTo(TaskSchema.Subject, name),
+            new SearchFilter.IsEqualTo(TaskSchema.IsComplete, false)
+        ), new ItemView(1)));
         if (existingTasks.TotalCount > 0)
         {
             Console.WriteLine($"WARNING: Duplicate task in {list.DisplayName}: {FormatTask(existingTasks.First())}");
