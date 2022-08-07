@@ -4,6 +4,15 @@ using Task = Microsoft.Exchange.WebServices.Data.Task;
 
 class Program
 {
+    enum OutputFormat
+    {
+        Console,
+        Markdown,
+    }
+
+    static string List = "";
+    static OutputFormat Output = OutputFormat.Console;
+
     /// <summary>
     /// A command-line tool for manipulating Microsoft To Do/Tasks
     /// </summary>
@@ -15,23 +24,24 @@ class Program
     /// <param name="name">Specify the name of a task</param>
     /// <param name="body">Specify the body of a task</param>
     /// <param name="important">Specify that the task is important</param>
-    static async System.Threading.Tasks.Task Main(FileInfo? config = null, bool lists = false, bool tasks = false, bool createTask = false, string? list = null, string? name = null, string? body = null, bool important = false)
+    /// <param name="output">Specify the output format</param>
+    static async System.Threading.Tasks.Task Main(FileInfo? config = null, bool lists = false, bool tasks = false, bool createTask = false, string list = "", string? name = null, string? body = null, bool important = false, OutputFormat output = OutputFormat.Console)
     {
         if (config == null) config = new FileInfo("config.json");
+        List = list;
+        Output = output;
         if (lists)
         {
             await Lists(LoadConfiguration(config));
         }
         else if (tasks)
         {
-            ArgumentNullException.ThrowIfNull(list);
-            await Tasks(LoadConfiguration(config), list);
+            await Tasks(LoadConfiguration(config));
         }
         else if (createTask)
         {
-            ArgumentNullException.ThrowIfNull(list);
             ArgumentNullException.ThrowIfNull(name);
-            await CreateTask(LoadConfiguration(config), list, name, body ?? "", important);
+            await CreateTask(LoadConfiguration(config), name, body ?? "", important);
         }
         else
         {
@@ -65,21 +75,21 @@ class Program
         }
     }
 
-    static async System.Threading.Tasks.Task Tasks(IConfigurationRoot config, string listName)
+    static async System.Threading.Tasks.Task Tasks(IConfigurationRoot config)
     {
         var service = GetExchange(config);
-        var list = await GetList(service, listName);
+        var list = await GetList(service);
         var tasks = await Retry("get tasks", () => list.FindItems(new ItemView(1000)));
         foreach (var task in tasks)
         {
-            Console.WriteLine(FormatTask(task));
+            Console.WriteLine(await FormatTask(task));
         }
     }
 
-    static async System.Threading.Tasks.Task CreateTask(IConfigurationRoot config, string listName, string name, string body, bool important)
+    static async System.Threading.Tasks.Task CreateTask(IConfigurationRoot config, string name, string body, bool important)
     {
         var service = GetExchange(config);
-        var list = await GetList(service, listName, always: true);
+        var list = await GetList(service, always: true);
         var existingTasks = await Retry("get existing tasks", () => list.FindItems(new SearchFilter.SearchFilterCollection(
             LogicalOperator.And,
             new SearchFilter.IsEqualTo(TaskSchema.Subject, name),
@@ -87,7 +97,7 @@ class Program
         ), new ItemView(1)));
         if (existingTasks.TotalCount > 0)
         {
-            Console.WriteLine($"WARNING: Duplicate task in {list.DisplayName}: {FormatTask(existingTasks.First())}");
+            Console.WriteLine($"WARNING: Duplicate task in {list.DisplayName}: {FormatTaskConsole(existingTasks.First() as Task)}");
             return;
         }
         var task = new Task(service);
@@ -96,23 +106,49 @@ class Program
         task.Importance = important ? Importance.High : Importance.Normal;
         await task.Save(list.Id);
         await task.Load();
-        Console.WriteLine($"Created task in {list.DisplayName}: {FormatTask(task)}");
+        Console.WriteLine($"Created task in {list.DisplayName}: {FormatTaskConsole(task)}");
     }
 
-    static async Task<Folder> GetList(ExchangeService service, string listName, bool always = false)
+    static async Task<Folder> GetList(ExchangeService service, bool always = false)
     {
         var taskFolder = await Retry("get tasks folder", () => Folder.Bind(service, WellKnownFolderName.Tasks));
-        if (listName == "") return taskFolder;
-        var lists = await Retry("get list", () => taskFolder.FindFolders(new SearchFilter.ContainsSubstring(FolderSchema.DisplayName, listName), new FolderView(1)));
+        if (List == "") return taskFolder;
+        var lists = await Retry("get list", () => taskFolder.FindFolders(new SearchFilter.ContainsSubstring(FolderSchema.DisplayName, List), new FolderView(1)));
         if (lists.TotalCount == 0 && always) return taskFolder;
-        if (lists.TotalCount == 0) throw new InvalidDataException($"No list containing text: {listName}");
+        if (lists.TotalCount == 0) throw new InvalidDataException($"No list containing text: {List}");
         return lists.First();
     }
 
-    static string FormatTask(Item item)
+    static async Task<string> FormatTask(Item item)
     {
         var task = item as Task;
-        return $"[{(task?.IsComplete ?? false ? "X" : " ")}] {(item.Importance == Importance.High ? "*" : " ")} {item.Subject}";
+        if (task == null) return "";
+        switch (Output)
+        {
+            case OutputFormat.Console:
+                return FormatTaskConsole(task);
+            case OutputFormat.Markdown:
+                return await FormatTaskMarkdown(task);
+            default:
+                throw new InvalidOperationException($"Unknown output format: {Output}");
+        }
+    }
+
+    static string FormatTaskConsole(Task? task)
+    {
+        return $"[{(task?.IsComplete ?? false ? "X" : " ")}] {(task?.Importance == Importance.High ? "*" : " ")} {task?.Subject}";
+    }
+
+    static async Task<string> FormatTaskMarkdown(Task task)
+    {
+        await task.Load(BasePropertySet.FirstClassProperties);
+        return String.Join("\n  ", Split("\n", task.Body.ToString()).Prepend($"- [{(task.IsComplete ? "X" : " ")}] {task.Subject}{(task.Importance == Importance.High ? " [important:: true]" : "")}"));
+    }
+
+    static string[] Split(string separator, string text)
+    {
+        if (String.IsNullOrWhiteSpace(text)) return new string[0];
+        return text.Split(separator);
     }
 
     static async Task<T> Retry<T>(string name, Func<Task<T>> action)
