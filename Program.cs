@@ -80,7 +80,7 @@ class Program
         var service = GetExchange(config);
         var list = await GetList(service);
         var tasks = await Retry("get tasks", () => list.FindItems(new ItemView(1000) { PropertySet = PropertySet.IdOnly }));
-        await service.LoadPropertiesForItems(tasks, new PropertySet(TaskSchema.Subject, TaskSchema.Body, TaskSchema.Importance, TaskSchema.IsComplete));
+        if (tasks.Any()) await service.LoadPropertiesForItems(tasks, new PropertySet(TaskSchema.Subject, TaskSchema.Body, TaskSchema.Importance, TaskSchema.IsComplete));
         if (Output == OutputFormat.Markdown)
         {
             Console.WriteLine($"# {list.DisplayName}");
