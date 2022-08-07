@@ -79,6 +79,11 @@ class Program
     {
         var service = GetExchange(config);
         var list = await GetList(service);
+        if (Output == OutputFormat.Markdown)
+        {
+            Console.WriteLine($"# {list.DisplayName}");
+            Console.WriteLine();
+        }
         var tasks = await Retry("get tasks", () => list.FindItems(new ItemView(1000)));
         foreach (var task in tasks)
         {
