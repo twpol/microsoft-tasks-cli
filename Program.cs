@@ -79,15 +79,16 @@ class Program
     {
         var service = GetExchange(config);
         var list = await GetList(service);
+        var tasks = await Retry("get tasks", () => list.FindItems(new ItemView(1000) { PropertySet = PropertySet.IdOnly }));
+        await service.LoadPropertiesForItems(tasks, new PropertySet(TaskSchema.Subject, TaskSchema.Body, TaskSchema.Importance, TaskSchema.IsComplete));
         if (Output == OutputFormat.Markdown)
         {
             Console.WriteLine($"# {list.DisplayName}");
             Console.WriteLine();
         }
-        var tasks = await Retry("get tasks", () => list.FindItems(new ItemView(1000)));
         foreach (var task in tasks)
         {
-            Console.WriteLine(await FormatTask(task));
+            Console.WriteLine(FormatTask(task));
         }
     }
 
@@ -124,7 +125,7 @@ class Program
         return lists.First();
     }
 
-    static async Task<string> FormatTask(Item item)
+    static string FormatTask(Item item)
     {
         var task = item as Task;
         if (task == null) return "";
@@ -133,7 +134,7 @@ class Program
             case OutputFormat.Console:
                 return FormatTaskConsole(task);
             case OutputFormat.Markdown:
-                return await FormatTaskMarkdown(task);
+                return FormatTaskMarkdown(task);
             default:
                 throw new InvalidOperationException($"Unknown output format: {Output}");
         }
@@ -144,9 +145,8 @@ class Program
         return $"[{(task?.IsComplete ?? false ? "X" : " ")}] {(task?.Importance == Importance.High ? "*" : " ")} {task?.Subject}";
     }
 
-    static async Task<string> FormatTaskMarkdown(Task task)
+    static string FormatTaskMarkdown(Task task)
     {
-        await task.Load(BasePropertySet.FirstClassProperties);
         return String.Join("\n  ", Split("\n", task.Body.ToString()).Prepend($"- [{(task.IsComplete ? "X" : " ")}] {task.Subject}{(task.Importance == Importance.High ? " [important:: true]" : "")}"));
     }
 
