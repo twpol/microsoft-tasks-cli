@@ -1,4 +1,4 @@
-using Microsoft.Exchange.WebServices.Data;
+﻿using Microsoft.Exchange.WebServices.Data;
 using Microsoft.Extensions.Configuration;
 using Task = Microsoft.Exchange.WebServices.Data.Task;
 
@@ -69,9 +69,15 @@ class Program
         var service = GetExchange(config);
         var taskFolder = await Retry("get tasks folder", () => Folder.Bind(service, WellKnownFolderName.Tasks));
         var lists = await Retry("get lists", () => taskFolder.FindFolders(new FolderView(1000)));
+        if (Output == OutputFormat.Markdown)
+        {
+            Console.WriteLine($"# Lists");
+            Console.WriteLine();
+            Console.WriteLine($"- Tasks ({taskFolder.Id})");
+        }
         foreach (var list in lists)
         {
-            Console.WriteLine(list.DisplayName);
+            Console.WriteLine(FormatList(list));
         }
     }
 
@@ -125,6 +131,19 @@ class Program
         if (lists.TotalCount == 0 && always) return taskFolder;
         if (lists.TotalCount == 0) throw new InvalidDataException($"No list containing text: {List}");
         return lists.First();
+    }
+
+    static string FormatList(Folder list)
+    {
+        switch (Output)
+        {
+            case OutputFormat.Console:
+                return list.DisplayName;
+            case OutputFormat.Markdown:
+                return $"- {list.DisplayName} ({list.Id})";
+            default:
+                throw new InvalidOperationException($"Unknown output format: {Output}");
+        }
     }
 
     static string FormatTask(Item item)
