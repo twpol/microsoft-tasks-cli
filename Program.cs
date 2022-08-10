@@ -1,4 +1,4 @@
-﻿using Microsoft.Exchange.WebServices.Data;
+using Microsoft.Exchange.WebServices.Data;
 using Microsoft.Extensions.Configuration;
 using Task = Microsoft.Exchange.WebServices.Data.Task;
 
@@ -119,6 +119,8 @@ class Program
     {
         var taskFolder = await Retry("get tasks folder", () => Folder.Bind(service, WellKnownFolderName.Tasks));
         if (List == "") return taskFolder;
+        var list = await Retry("get exact list", () => Folder.Bind(service, List));
+        if (list != null) return list;
         var lists = await Retry("get list", () => taskFolder.FindFolders(new SearchFilter.ContainsSubstring(FolderSchema.DisplayName, List), new FolderView(1)));
         if (lists.TotalCount == 0 && always) return taskFolder;
         if (lists.TotalCount == 0) throw new InvalidDataException($"No list containing text: {List}");
