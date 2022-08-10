@@ -125,8 +125,18 @@ class Program
     {
         var taskFolder = await Retry("get tasks folder", () => Folder.Bind(service, WellKnownFolderName.Tasks));
         if (List == "") return taskFolder;
-        var list = await Retry("get exact list", () => Folder.Bind(service, List));
-        if (list != null) return list;
+        try
+        {
+            return await Retry("get exact list", () => Folder.Bind(service, List));
+        }
+        catch (ServiceResponseException error) when (error.ErrorCode == ServiceError.ErrorInvalidId)
+        {
+            throw new InvalidDataException($"No list with ID: {List}");
+        }
+        catch (ServiceResponseException error) when (error.ErrorCode == ServiceError.ErrorInvalidIdMalformed)
+        {
+            // List is not an ID
+        }
         var lists = await Retry("get list", () => taskFolder.FindFolders(new SearchFilter.ContainsSubstring(FolderSchema.DisplayName, List), new FolderView(1)));
         if (lists.TotalCount == 0 && always) return taskFolder;
         if (lists.TotalCount == 0) throw new InvalidDataException($"No list containing text: {List}");
