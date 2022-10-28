@@ -14,7 +14,7 @@ class Program
     static OutputFormat Output = OutputFormat.Console;
 
     /// <summary>
-    /// A command-line tool for manipulating Microsoft To Do/Tasks
+    /// Command-line tool for manipulating Microsoft To Do/Tasks
     /// </summary>
     /// <param name="config">Path to configuration file</param>
     /// <param name="lists">Action: show all lists</param>
