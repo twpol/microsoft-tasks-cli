@@ -88,7 +88,7 @@ class Program
         var service = GetExchange(config);
         var list = await GetList(service);
         var tasks = await Retry("get tasks", () => list.FindItems(new ItemView(1000) { PropertySet = PropertySet.IdOnly }));
-        if (tasks.Any()) await service.LoadPropertiesForItems(tasks, new PropertySet(TaskSchema.Subject, TaskSchema.Body, TaskSchema.Importance, TaskSchema.IsComplete));
+        if (tasks.Any()) await service.LoadPropertiesForItems(tasks, new PropertySet(TaskSchema.Subject, TaskSchema.Body, TaskSchema.Importance, TaskSchema.IsComplete, TaskSchema.CompleteDate));
         if (Output == OutputFormat.Markdown)
         {
             Console.WriteLine($"# {list.DisplayName}");
@@ -173,12 +173,12 @@ class Program
 
     static string FormatTaskConsole(Task task)
     {
-        return $"[{(task.IsComplete ? "X" : " ")}] {(task.Importance == Importance.High ? "*" : " ")} {task.Subject}";
+        return $"[{(task.IsComplete ? "X" : " ")}] {(task.Importance == Importance.High ? "*" : " ")} {task.Subject}{(task.IsComplete ? $" (completion {task.CompleteDate:yyyy-MM-dd})" : "")}";
     }
 
     static string FormatTaskMarkdown(Task task)
     {
-        return String.Join("\n  ", Split("\n", task.Body.ToString()).Prepend($"- [{(task.IsComplete ? "X" : " ")}] {task.Subject}{(task.Importance == Importance.High ? " [important:: true]" : "")}"));
+        return String.Join("\n  ", Split("\n", task.Body.ToString()).Prepend($"- [{(task.IsComplete ? "X" : " ")}] {task.Subject}{(task.Importance == Importance.High ? " [important:: true]" : "")}{(task.IsComplete ? $" [completion:: {task.CompleteDate:yyyy-MM-dd}]" : "")}"));
     }
 
     static string[] Split(string separator, string text)
