@@ -21,11 +21,13 @@ class Program
     /// <param name="tasks">Action: show all To Dos/Tasks in a list</param>
     /// <param name="createTask">Action: create a new To Do/Task</param>
     /// <param name="list">Specify the name or ID of a task list</param>
+    /// <param name="key">Specify the substring to match an existing task</param>
     /// <param name="name">Specify the name of a task</param>
     /// <param name="body">Specify the body of a task</param>
     /// <param name="important">Specify that the task is important</param>
+    /// <param name="complete">Specify that the task is completed</param>
     /// <param name="output">Specify the output format</param>
-    static async System.Threading.Tasks.Task Main(FileInfo? config = null, bool lists = false, bool tasks = false, bool createTask = false, string list = "", string? name = null, string? body = null, bool important = false, OutputFormat output = OutputFormat.Console)
+    static async System.Threading.Tasks.Task Main(FileInfo? config = null, bool lists = false, bool tasks = false, bool createTask = false, string list = "", string? key = null, string? name = null, string? body = null, bool? important = null, bool? complete = null, OutputFormat output = OutputFormat.Console)
     {
         config ??= new FileInfo("config.json");
         List = list;
@@ -41,7 +43,7 @@ class Program
         else if (createTask)
         {
             ArgumentNullException.ThrowIfNull(name);
-            await CreateTask(LoadConfiguration(config), name, body ?? "", important);
+            await CreateOrEditTask(LoadConfiguration(config), key, name, body ?? "", important, complete);
         }
         else
         {
@@ -100,32 +102,50 @@ class Program
         }
     }
 
-    static async System.Threading.Tasks.Task CreateTask(IConfigurationRoot config, string name, string body, bool important)
+    static async System.Threading.Tasks.Task CreateOrEditTask(IConfigurationRoot config, string? key, string name, string body, bool? important, bool? complete)
     {
+        if (key != null && !name.Contains(key))
+        {
+            throw new InvalidDataException($"Task name does not contain key: {key}");
+        }
         var service = GetExchange(config);
         var list = await GetList(service, always: true);
-        var existingTasks = await Retry("get existing tasks", () => list.FindItems(new SearchFilter.SearchFilterCollection(
-            LogicalOperator.And,
-            new SearchFilter.IsEqualTo(TaskSchema.Subject, name),
-            new SearchFilter.IsEqualTo(TaskSchema.IsComplete, false)
-        ), new ItemView(1)));
-        if (existingTasks.TotalCount > 0)
+        var existingTasks = await Retry("get existing tasks", () =>
         {
-            if (existingTasks.First() is Task existingTask)
-            {
-                Console.WriteLine($"WARNING: Duplicate task in {list.DisplayName}: {FormatTaskConsole(existingTask)}");
-            }
+            SearchFilter searchFilter = key == null
+                ? new SearchFilter.SearchFilterCollection(LogicalOperator.And, new SearchFilter.IsEqualTo(TaskSchema.Subject, name), new SearchFilter.IsEqualTo(TaskSchema.IsComplete, false))
+                : new SearchFilter.ContainsSubstring(TaskSchema.Subject, key);
+            return list.FindItems(searchFilter, new ItemView(1));
+        });
+        var task = existingTasks.FirstOrDefault() as Task;
+        if (key == null && task != null)
+        {
+            Console.WriteLine($"WARNING: Duplicate task in {list.DisplayName}: {FormatTaskConsole(task)}");
             return;
         }
-        var task = new Task(service)
+        if (task == null)
         {
-            Subject = name,
-            Body = body,
-            Importance = important ? Importance.High : Importance.Normal
-        };
-        await task.Save(list.Id);
-        await task.Load();
-        Console.WriteLine($"Created task in {list.DisplayName}: {FormatTaskConsole(task)}");
+            task = new Task(service)
+            {
+                Subject = name,
+                Body = body,
+                Importance = important ?? false ? Importance.High : Importance.Normal,
+                PercentComplete = complete ?? false ? 100 : 0,
+            };
+            await task.Save(list.Id);
+            await task.Load();
+            Console.WriteLine($"Created task in {list.DisplayName}: {FormatTaskConsole(task)}");
+        }
+        else
+        {
+            task.Subject = name;
+            task.Body = body;
+            if (important.HasValue) task.Importance = important.Value ? Importance.High : Importance.Normal;
+            if (complete.HasValue) task.PercentComplete = complete.Value ? 100 : 0;
+            await task.Update(ConflictResolutionMode.AutoResolve);
+            await task.Load();
+            Console.WriteLine($"Edited task in {list.DisplayName}: {FormatTaskConsole(task)}");
+        }
     }
 
     static async Task<Folder> GetList(ExchangeService service, bool always = false)
