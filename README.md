@@ -1,4 +1,4 @@
-# Microsoft Tasks CLI
+﻿# Microsoft Tasks CLI
 
 Command-line tool for manipulating Microsoft To Do/Tasks.
 
@@ -33,6 +33,10 @@ MicrosoftTasksCLI [options]
 
   Specify the name or ID of a task list [] (required).
 
+- `--key <key>`
+
+  Specify the substring to match an existing task [] (required).
+
 - `--name <name>`
 
   Specify the name of a task [] (required).
@@ -43,7 +47,11 @@ MicrosoftTasksCLI [options]
 
 - `--important`
 
-  Specify that the task is important.
+  Specify that the task is important [] (required).
+
+- `--complete`
+
+  Specify that the task is completed [] (required).
 
 - `--output <Console|Markdown>`
 
