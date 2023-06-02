@@ -27,7 +27,7 @@ class Program
     /// <param name="output">Specify the output format</param>
     static async System.Threading.Tasks.Task Main(FileInfo? config = null, bool lists = false, bool tasks = false, bool createTask = false, string list = "", string? name = null, string? body = null, bool important = false, OutputFormat output = OutputFormat.Console)
     {
-        if (config == null) config = new FileInfo("config.json");
+        config ??= new FileInfo("config.json");
         List = list;
         Output = output;
         if (lists)
@@ -58,8 +58,10 @@ class Program
 
     static ExchangeService GetExchange(IConfigurationRoot config)
     {
-        var service = new ExchangeService(ExchangeVersion.Exchange2016);
-        service.Credentials = new WebCredentials(config["username"], config["password"]);
+        var service = new ExchangeService(ExchangeVersion.Exchange2016)
+        {
+            Credentials = new WebCredentials(config["username"], config["password"])
+        };
         service.AutodiscoverUrl(config["email"], redirectionUri => new Uri(redirectionUri).Scheme == "https");
         return service;
     }
@@ -86,7 +88,7 @@ class Program
         var service = GetExchange(config);
         var list = await GetList(service);
         var tasks = await Retry("get tasks", () => list.FindItems(new ItemView(1000) { PropertySet = PropertySet.IdOnly }));
-        if (tasks.Any()) await service.LoadPropertiesForItems(tasks, new PropertySet(TaskSchema.Subject, TaskSchema.Body, TaskSchema.Importance, TaskSchema.IsComplete));
+        if (tasks.Any()) await service.LoadPropertiesForItems(tasks, new PropertySet(TaskSchema.Subject, TaskSchema.Body, TaskSchema.Importance, TaskSchema.IsComplete, TaskSchema.CompleteDate));
         if (Output == OutputFormat.Markdown)
         {
             Console.WriteLine($"# {list.DisplayName}");
@@ -109,13 +111,18 @@ class Program
         ), new ItemView(1)));
         if (existingTasks.TotalCount > 0)
         {
-            Console.WriteLine($"WARNING: Duplicate task in {list.DisplayName}: {FormatTaskConsole(existingTasks.First() as Task)}");
+            if (existingTasks.First() is Task existingTask)
+            {
+                Console.WriteLine($"WARNING: Duplicate task in {list.DisplayName}: {FormatTaskConsole(existingTask)}");
+            }
             return;
         }
-        var task = new Task(service);
-        task.Subject = name;
-        task.Body = body;
-        task.Importance = important ? Importance.High : Importance.Normal;
+        var task = new Task(service)
+        {
+            Subject = name,
+            Body = body,
+            Importance = important ? Importance.High : Importance.Normal
+        };
         await task.Save(list.Id);
         await task.Load();
         Console.WriteLine($"Created task in {list.DisplayName}: {FormatTaskConsole(task)}");
@@ -145,45 +152,38 @@ class Program
 
     static string FormatList(Folder list)
     {
-        switch (Output)
+        return Output switch
         {
-            case OutputFormat.Console:
-                return list.DisplayName;
-            case OutputFormat.Markdown:
-                return $"- {list.DisplayName} ({list.Id})";
-            default:
-                throw new InvalidOperationException($"Unknown output format: {Output}");
-        }
+            OutputFormat.Console => list.DisplayName,
+            OutputFormat.Markdown => $"- {list.DisplayName} ({list.Id})",
+            _ => throw new InvalidOperationException($"Unknown output format: {Output}"),
+        };
     }
 
     static string FormatTask(Item item)
     {
-        var task = item as Task;
-        if (task == null) return "";
-        switch (Output)
+        if (item is not Task task) return "";
+        return Output switch
         {
-            case OutputFormat.Console:
-                return FormatTaskConsole(task);
-            case OutputFormat.Markdown:
-                return FormatTaskMarkdown(task);
-            default:
-                throw new InvalidOperationException($"Unknown output format: {Output}");
-        }
+            OutputFormat.Console => FormatTaskConsole(task),
+            OutputFormat.Markdown => FormatTaskMarkdown(task),
+            _ => throw new InvalidOperationException($"Unknown output format: {Output}"),
+        };
     }
 
-    static string FormatTaskConsole(Task? task)
+    static string FormatTaskConsole(Task task)
     {
-        return $"[{(task?.IsComplete ?? false ? "X" : " ")}] {(task?.Importance == Importance.High ? "*" : " ")} {task?.Subject}";
+        return $"[{(task.IsComplete ? "X" : " ")}] {(task.Importance == Importance.High ? "*" : " ")} {task.Subject}{(task.IsComplete ? $" (completion {task.CompleteDate:yyyy-MM-dd})" : "")}";
     }
 
     static string FormatTaskMarkdown(Task task)
     {
-        return String.Join("\n  ", Split("\n", task.Body.ToString()).Prepend($"- [{(task.IsComplete ? "X" : " ")}] {task.Subject}{(task.Importance == Importance.High ? " [important:: true]" : "")}"));
+        return String.Join("\n  ", Split("\n", task.Body.ToString()).Prepend($"- [{(task.IsComplete ? "X" : " ")}] {task.Subject}{(task.Importance == Importance.High ? " [important:: true]" : "")}{(task.IsComplete ? $" [completion:: {task.CompleteDate:yyyy-MM-dd}]" : "")}"));
     }
 
     static string[] Split(string separator, string text)
     {
-        if (String.IsNullOrWhiteSpace(text)) return new string[0];
+        if (String.IsNullOrWhiteSpace(text)) return Array.Empty<string>();
         return text.Split(separator);
     }
 
