@@ -44,7 +44,7 @@ class Program
         else if (createTask)
         {
             ArgumentNullException.ThrowIfNull(name);
-            await CreateOrEditTask(LoadConfiguration(config), key, name, body ?? "", important, complete);
+            await CreateOrEditTask(LoadConfiguration(config), key, name, body, important, complete);
         }
         else
         {
@@ -103,7 +103,7 @@ class Program
         }
     }
 
-    static async System.Threading.Tasks.Task CreateOrEditTask(IConfigurationRoot config, string? key, string name, string body, bool? important, bool? complete)
+    static async System.Threading.Tasks.Task CreateOrEditTask(IConfigurationRoot config, string? key, string name, string? body, bool? important, bool? complete)
     {
         if (key != null && !name.Contains(key))
         {
@@ -124,6 +124,7 @@ class Program
             Console.WriteLine($"WARNING: Duplicate task in {list.DisplayName}: {FormatTaskConsole(task)}");
             return;
         }
+        var taskBody = new MessageBody(BodyType.Text, string.IsNullOrWhiteSpace(body) ? null : body);
         var taskImportance = important ?? false ? Importance.High : Importance.Normal;
         var taskStatus = complete ?? false ? TaskStatus.Completed : TaskStatus.NotStarted;
         if (task == null)
@@ -131,7 +132,7 @@ class Program
             task = new Task(service)
             {
                 Subject = name,
-                Body = body,
+                Body = taskBody,
                 Importance = taskImportance,
                 Status = taskStatus,
             };
@@ -141,13 +142,17 @@ class Program
         }
         else
         {
-            task.Subject = name;
-            task.Body = body;
+            await task.Load(PropertySet.FirstClassProperties);
+            if (task.Subject != name) task.Subject = name;
+            if (task.Body.ToString() != taskBody.ToString()) task.Body = taskBody;
             if (important.HasValue && task.Importance != taskImportance) task.Importance = taskImportance;
             if (complete.HasValue && task.Status != taskStatus) task.Status = taskStatus;
-            await task.Update(ConflictResolutionMode.AutoResolve);
-            await task.Load();
-            Console.WriteLine($"Edited task in {list.DisplayName}: {FormatTaskConsole(task)}");
+            if (task.IsDirty)
+            {
+                await task.Update(ConflictResolutionMode.AutoResolve);
+                await task.Load();
+                Console.WriteLine($"Updated task in {list.DisplayName}: {FormatTaskConsole(task)}");
+            }
         }
     }
 
