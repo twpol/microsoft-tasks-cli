@@ -1,6 +1,7 @@
 ﻿using Microsoft.Exchange.WebServices.Data;
 using Microsoft.Extensions.Configuration;
 using Task = Microsoft.Exchange.WebServices.Data.Task;
+using TaskStatus = Microsoft.Exchange.WebServices.Data.TaskStatus;
 
 class Program
 {
@@ -123,14 +124,16 @@ class Program
             Console.WriteLine($"WARNING: Duplicate task in {list.DisplayName}: {FormatTaskConsole(task)}");
             return;
         }
+        var taskImportance = important ?? false ? Importance.High : Importance.Normal;
+        var taskStatus = complete ?? false ? TaskStatus.Completed : TaskStatus.NotStarted;
         if (task == null)
         {
             task = new Task(service)
             {
                 Subject = name,
                 Body = body,
-                Importance = important ?? false ? Importance.High : Importance.Normal,
-                PercentComplete = complete ?? false ? 100 : 0,
+                Importance = taskImportance,
+                Status = taskStatus,
             };
             await task.Save(list.Id);
             await task.Load();
@@ -140,8 +143,8 @@ class Program
         {
             task.Subject = name;
             task.Body = body;
-            if (important.HasValue) task.Importance = important.Value ? Importance.High : Importance.Normal;
-            if (complete.HasValue) task.PercentComplete = complete.Value ? 100 : 0;
+            if (important.HasValue && task.Importance != taskImportance) task.Importance = taskImportance;
+            if (complete.HasValue && task.Status != taskStatus) task.Status = taskStatus;
             await task.Update(ConflictResolutionMode.AutoResolve);
             await task.Load();
             Console.WriteLine($"Edited task in {list.DisplayName}: {FormatTaskConsole(task)}");
