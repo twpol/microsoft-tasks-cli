@@ -1,4 +1,4 @@
-﻿using Microsoft.Exchange.WebServices.Data;
+using Microsoft.Exchange.WebServices.Data;
 using Microsoft.Extensions.Configuration;
 using Task = Microsoft.Exchange.WebServices.Data.Task;
 using TaskStatus = Microsoft.Exchange.WebServices.Data.TaskStatus;
@@ -124,7 +124,7 @@ class Program
             Console.WriteLine($"WARNING: Duplicate task in {list.DisplayName}: {FormatTaskConsole(task)}");
             return;
         }
-        var taskBody = new MessageBody(BodyType.Text, string.IsNullOrWhiteSpace(body) ? null : body);
+        var taskBody = new MessageBody(BodyType.Text, string.IsNullOrWhiteSpace(body) ? null : body.ReplaceLineEndings("\n"));
         var taskImportance = important ?? false ? Importance.High : Importance.Normal;
         var taskStatus = complete ?? false ? TaskStatus.Completed : TaskStatus.NotStarted;
         if (task == null)
