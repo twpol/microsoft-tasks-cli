@@ -149,7 +149,7 @@ class Program
             if (complete.HasValue && task.Status != taskStatus) task.Status = taskStatus;
             if (task.IsDirty)
             {
-                await task.Update(ConflictResolutionMode.AutoResolve);
+                await task.Update(ConflictResolutionMode.AlwaysOverwrite);
                 await task.Load();
                 Console.WriteLine($"Updated task in {list.DisplayName}: {FormatTaskConsole(task)}");
             }
