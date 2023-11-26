@@ -1,4 +1,4 @@
-using Microsoft.Exchange.WebServices.Data;
+﻿using Microsoft.Exchange.WebServices.Data;
 using Microsoft.Extensions.Configuration;
 using Task = Microsoft.Exchange.WebServices.Data.Task;
 using TaskStatus = Microsoft.Exchange.WebServices.Data.TaskStatus;
@@ -121,7 +121,7 @@ class Program
         var task = existingTasks.FirstOrDefault() as Task;
         if (key == null && task != null)
         {
-            Console.WriteLine($"WARNING: Duplicate task in {list.DisplayName}: {FormatTaskConsole(task)}");
+            Console.Error.WriteLine($"WARNING: Duplicate task in {list.DisplayName}: {FormatTaskConsole(task)}");
             return;
         }
         var taskBody = new MessageBody(BodyType.Text, string.IsNullOrWhiteSpace(body) ? null : body.ReplaceLineEndings("\n"));
@@ -225,7 +225,7 @@ class Program
             }
             catch (ServerBusyException error)
             {
-                Console.WriteLine($"Retry of {name} due to server busy (back off for {error.BackOffMilliseconds} ms)");
+                Console.Error.WriteLine($"WARNING: Retry of {name} due to server busy (back off for {error.BackOffMilliseconds} ms)");
                 Thread.Sleep(error.BackOffMilliseconds);
             }
         }
