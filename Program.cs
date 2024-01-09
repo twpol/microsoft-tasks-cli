@@ -90,16 +90,23 @@ class Program
     {
         var service = GetExchange(config);
         var list = await GetList(service);
-        var tasks = await Retry("get tasks", () => list.FindItems(new ItemView(1000) { PropertySet = PropertySet.IdOnly }));
-        if (tasks.Any()) await service.LoadPropertiesForItems(tasks, new PropertySet(TaskSchema.Subject, TaskSchema.Body, TaskSchema.Importance, TaskSchema.IsComplete, TaskSchema.CompleteDate));
         if (Output == OutputFormat.Markdown)
         {
             Console.WriteLine($"# {list.DisplayName}");
             Console.WriteLine();
         }
-        foreach (var task in tasks)
+        var view = new ItemView(1000) { PropertySet = PropertySet.IdOnly };
+        while (true)
         {
-            Console.WriteLine(FormatTask(task));
+            var tasks = await Retry("get tasks", () => list.FindItems(view));
+            if (!tasks.Any()) break;
+            await service.LoadPropertiesForItems(tasks, new PropertySet(TaskSchema.Subject, TaskSchema.Body, TaskSchema.Importance, TaskSchema.IsComplete, TaskSchema.CompleteDate));
+            foreach (var task in tasks)
+            {
+                Console.WriteLine(FormatTask(task));
+            }
+            if (!tasks.NextPageOffset.HasValue) break;
+            view.Offset = tasks.NextPageOffset.Value;
         }
     }
 
